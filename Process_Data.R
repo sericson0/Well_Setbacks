@@ -64,7 +64,7 @@ buffer_in_segments = function(df, output_basename, cutoff, buffer_len) {
     tme = proc.time()[3]
     print(paste(i, "of", N))
     saveRDS(st_union(st_buffer(df[((i-1)*cutoff + 1):min(length(water_flow), i*cutoff)], buffer_len)), 
-            paste0(output_basename, "_", i, ".rds"))
+            paste0(output_basename, "_", i, ".rdata"))
     print(proc.time()[3] - tme)
   }
 }
