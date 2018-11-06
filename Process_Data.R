@@ -1,15 +1,3 @@
-#This code transforms projected data into a format conducive for analysis
-#Processing steps consist of simplifying data and prebuffering.Files are saved in output_folder
-#Processing Steps include:
-#     1. wetlands, water_area and water_body are cast into MULTIPOLYGONS format 
-#     2. all water data is simplified at the SIMPLIFY_TOLERANCE level (default is 100 meters)
-#        This reduces the accuracy of the data, but allows for a reduction in file sizes and computation times
-#     3. wetlands, water_area and water body are unionized into a single shapefile titled water
-#     4. water is buffered at the MIN_BUFFER_LEN (default is 250 feet) and saved in Water Min Buffer folder as water_buffer_0.rdata 
-#     5. water_flow, which is a large file (1.3Gb) is buffered in segments (default of 100,000 objects in each segment) 
-#        saved in Min Buffer folder as water_buffer_0 - water_buffer_N
-#     6. addresses are buffered in the same way
-#____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
 #The usual
@@ -33,20 +21,17 @@ loadPackage("sf")
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
 #Constants 
-FOOT_TO_METERS = 0.3048
-MIN_BUFFER_LEN = 250*FOOT_TO_METERS
+FEET_TO_METERS = 0.3048
 SIMPLIFY_TOLERANCE = 100
-CUTOFF = 100000
+MIN_SETBACK = 250
+MAX_SETBACK = 3500
+SETBACK_STEP = 250
 ##
 #Folder paths. create new folders as needed
 main_folder = "Spatial Data"
 input_folder = file.path(main_folder, "Projected Data")
-output_folder = file.path(main_folder, "Transformed Data")
-water_buffer_folder = file.path(output_folder, "Water Min Buffers")
-address_buffer_folder = file.path(output_folder, "Address Min Buffers")
+output_folder = file.path(main_folder, "Drillable Area")
 dir.create(output_folder)
-dir.create(water_buffer_folder)
-dir.create(address_buffer_folder)
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
@@ -56,57 +41,74 @@ cast_data = function(name, input_folder, to_shape = "MULTIPOLYGON") {
   st_cast(readRDS(file.path(input_folder, paste0(name, ".rdata"))), to = to_shape)
 }
 ##
-#buffer_in_segments buffers at buffer_len by segments - cutoff determining number of objects per segment - and saves 
-#buffered segments as output_basename_i for each increment i
-buffer_in_segments = function(df, output_basename, cutoff, buffer_len) {
-  N = ceiling(length(df)/cutoff)
-  for(i in 1:N) {
-    tme = proc.time()[3]
-    print(paste(i, "of", N))
-    saveRDS(st_union(st_buffer(df[((i-1)*cutoff + 1):min(length(water_flow), i*cutoff)], buffer_len)), 
-            paste0(output_basename, "_", i, ".rdata"))
-    print(proc.time()[3] - tme)
+#get_drillable_area gives county area which is not reserved for vulnerable areas
+get_drillable_area = function(county, setback) {
+  st_difference(county, setback)
+}
+##
+#Create bounding box around county and add maximum setback. This solvesboarder spillover issue.
+get_bounding_box = function(county, max_setback) {
+  bound_box = st_bbox(county)
+  bound_box[1:2] = bound_box[1:2] - max_setback * FEET_TO_METERS
+  bound_box[3:4] = bound_box[3:4] + max_setback * FEET_TO_METERS
+  return(bound_box)
+}
+
+#create_county_drillable_areas gives drillable area for each setback length and zero horizontal drilling given setback affects \
+#either only water or addresses.
+create_county_drillable_areas = function(county_name, county_shapefiles, wetlands, water_area, water_flow, water_body, addresses, 
+                                         min_setback, max_setback, setback_step, output_folder) {
+  #get county shapefile
+  county = st_geometry(county_shapefiles[which(county_shapefiles$NAME == county_name), ])
+    bound_box = get_bounding_box(county, max_setback)
+  #Create first setback
+  setback_m = min_setback*FEET_TO_METERS
+  #
+  water_buffers = do.call(c, list(st_buffer(st_crop(wetlands, bound_box), setback_m), st_buffer(st_crop(water_area, bound_box), setback_m),
+                                  st_buffer(st_crop(water_flow, bound_box), setback_m),st_buffer(st_crop(water_body, bound_box), setback_m) ))
+  ##
+  #Unioning takes additional upfront time but reduces file sizes
+  water_buffers = st_union(st_cast(water_buffers, 'MULTIPOLYGON'))
+  address_buffers = st_union(st_buffer(st_crop(addresses, bound_box), setback_m))
+  #Create directory to save data in
+  dir.create(file.path(output_folder, county_name))
+  #save drillable areas after minimum setback
+  saveRDS(get_drillable_area(county, water_buffers), file.path(output_folder, county_name, paste0(county_name,"_", "drillable water_", min_setback, ".rdata")))
+  saveRDS(get_drillable_area(county, address_buffers), file.path(output_folder, county_name, paste0(county_name,"_", "drillable addresses_", min_setback, ".rdata")))
+  #loops through setback lengths and creates drillable area for each
+  setback_lengths = seq(min_setback+setback_step, max_setback, setback_step)
+  for(setback_ft in setback_lengths) {
+    print(setback_ft)
+    setback_step_m = setback_step * FEET_TO_METERS
+    water_buffers = st_buffer(water_buffers, setback_step_m)
+    address_buffers = st_buffer(address_buffers, setback_step_m)
+    saveRDS(get_drillable_area(county, water_buffers), file.path(output_folder, county_name, paste0(county_name,"_", "drillable water_", setback_ft, ".rdata")))
+    saveRDS(get_drillable_area(county, address_buffers), file.path(output_folder, county_name, paste0(county_name,"_", "drillable addresses_", setback_ft, ".rdata")))
   }
 }
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
-#Process wetlands, water area and water body data
+#pre-process data
 wetlands = cast_data("wetlands", input_folder) 
 wetlands = st_simplify(wetlands, dTolerance = SIMPLIFY_TOLERANCE)
 water_area = cast_data("water_area", input_folder)
 water_area = st_simplify(water_area, dTolerance = SIMPLIFY_TOLERANCE)
 ##
-water = st_union(wetlands)
-water_area = st_union(water_area)
-water = st_union(water, water_area)
-##
 water_body = cast_data("water_body", input_folder)
-water_body = st_union(st_simplify(water_body, dTolerance = SIMPLIFY_TOLERANCE))
-water = st_union(water, water_body)
-saveRDS(water, file.path(output_folder, "water_simplified.rdata"))
-saveRDS(st_buffer(water, MIN_BUFFER_LEN), file.path(water_buffer_folder, "water_buffer_0.rdata"))
-#____________________________________________________________________________________________________________________
-#____________________________________________________________________________________________________________________
-#____________________________________________________________________________________________________________________
-#process water flow data
+water_body = st_simplify(water_body, dTolerance = SIMPLIFY_TOLERANCE)
 water_flow = readRDS(file.path(input_folder, "water_flow.rdata"))
-water_flow = st_simplify(water_flow, SIMPLIFY_TOLERANCE)
-saveRDS(water_flow, "water_flow_simplified.rdata")
-buffer_in_segments(water_flow, file.path(water_buffer_folder, "water_buffer"), CUTOFF, MIN_BUFFER_LEN)
-#____________________________________________________________________________________________________________________
-#____________________________________________________________________________________________________________________
-#____________________________________________________________________________________________________________________
-#process address data
 addresses = readRDS(file.path(input_folder, "addresses.rdata"))
-buffer_in_segments(addresses, file.path(address_buffer_folder, "address_buffer"), CUTOFF, MIN_BUFFER_LEN)
-
-#process other data. Default is no processing
-federal_lands = readRDS(file.path(input_folder, "federal_lands.rdata"))
-saveRDS(federal_lands, file.path(output_folder, "federal_lands.rdata"))
-
 county_shapefiles = readRDS(file.path(input_folder, "county_shapefiles.rdata"))
-saveRDS(county_shapefiles, file.path(output_folder, "county_shapefiles.rdata")) 
-
-field_polygons = readRDS(file.path(input_folder, "field_polygons.rdata"))
-saveRDS(field_polygons, file.path(output_folder, "field_polygons.rdata"))
+county_names = as.character(county_shapefiles$NAME)
+#____________________________________________________________________________________________________________________
+#____________________________________________________________________________________________________________________
+#____________________________________________________________________________________________________________________
+#create drillable surface areas for each county. Takes several hours
+for(county_name in county_names) {
+  print(county_name)
+  tme = proc.time()[3]
+  create_county_drillable_areas(county_name, county_shapefiles, wetlands, water_area, water_flow, water_body, addresses, 
+                                MIN_SETBACK, MAX_SETBACK, SETBACK_STEP, output_folder)
+  print(paste("Creating drillable areas for", county_name, "took", (proc.time()[3] - tme)/60, "minutes"))
+}
