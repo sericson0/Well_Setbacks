@@ -1,3 +1,6 @@
+#This code takes in transformed shapefiles and returns the drillable surface area for each county. 
+#Return files are drillable area if only addresses have setbacks and drillable area if only water has setbacks
+#____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
 #The usual
@@ -22,15 +25,18 @@ loadPackage("sf")
 #____________________________________________________________________________________________________________________
 #Constants 
 FEET_TO_METERS = 0.3048
+MILES_TO_METERS = FEET_TO_METERS * 5280
 SIMPLIFY_TOLERANCE = 100
 MIN_SETBACK = 250
 MAX_SETBACK = 3500
 SETBACK_STEP = 250
+MAX_HORIZONTAL = 3
+HORIZONTAL_STEP = .25
 ##
 #Folder paths. create new folders as needed
 main_folder = "Spatial Data"
 input_folder = file.path(main_folder, "Projected Data")
-output_folder = file.path(main_folder, "Drillable Area")
+output_folder = file.path(main_folder, "Setback Areas")
 dir.create(output_folder)
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
@@ -41,51 +47,44 @@ cast_data = function(name, input_folder, to_shape = "MULTIPOLYGON") {
   st_cast(readRDS(file.path(input_folder, paste0(name, ".rdata"))), to = to_shape)
 }
 ##
-#get_drillable_area gives county area which is not reserved for vulnerable areas
-get_drillable_area = function(county, setback) {
-  st_difference(county, setback)
-}
-##
-#Create bounding box around county and add maximum setback. This solvesboarder spillover issue.
-get_bounding_box = function(county, max_setback) {
+#Create bounding box around county and add maximum setback. This solves boarder spillover issue.
+get_bounding_box = function(county, max_setback, max_horizontal) {
   bound_box = st_bbox(county)
-  bound_box[1:2] = bound_box[1:2] - max_setback * FEET_TO_METERS
-  bound_box[3:4] = bound_box[3:4] + max_setback * FEET_TO_METERS
+  bound_box[1:2] = bound_box[1:2] - max_setback * FEET_TO_METERS - max_horizontal * MILES_TO_METERS
+  bound_box[3:4] = bound_box[3:4] + max_setback * FEET_TO_METERS + max_horizontal * MILES_TO_METERS
   return(bound_box)
 }
 
-#create_county_drillable_areas gives drillable area for each setback length and zero horizontal drilling given setback affects \
-#either only water or addresses.
-create_county_drillable_areas = function(county_name, county_shapefiles, wetlands, water_area, water_flow, water_body, addresses, 
-                                         min_setback, max_setback, setback_step, output_folder) {
-  #get county shapefile
-  county = st_geometry(county_shapefiles[which(county_shapefiles$NAME == county_name), ])
-    bound_box = get_bounding_box(county, max_setback)
-  #Create first setback
-  setback_m = min_setback*FEET_TO_METERS
+
+create_county_min_setback = function(county_name, county_shapefiles, wetlands, water_area, water_flow, water_body, addresses) {
+  county = county = st_geometry(county_shapefiles[which(county_shapefiles$NAME == county_name),])
+  bound_box = get_bounding_box(county, MAX_SETBACK, MAX_HORIZONTAL)
+  setback_m = MIN_SETBACK*FEET_TO_METERS
   #
-  water_buffers = do.call(c, list(st_buffer(st_crop(wetlands, bound_box), setback_m), st_buffer(st_crop(water_area, bound_box), setback_m),
-                                  st_buffer(st_crop(water_flow, bound_box), setback_m),st_buffer(st_crop(water_body, bound_box), setback_m) ))
-  ##
-  #Unioning takes additional upfront time but reduces file sizes
-  water_buffers = st_union(st_cast(water_buffers, 'MULTIPOLYGON'))
-  address_buffers = st_union(st_buffer(st_crop(addresses, bound_box), setback_m))
-  #Create directory to save data in
-  dir.create(file.path(output_folder, county_name))
-  #save drillable areas after minimum setback
-  saveRDS(get_drillable_area(county, water_buffers), file.path(output_folder, county_name, paste0(county_name,"_", "drillable water_", min_setback, ".rdata")))
-  saveRDS(get_drillable_area(county, address_buffers), file.path(output_folder, county_name, paste0(county_name,"_", "drillable addresses_", min_setback, ".rdata")))
-  #loops through setback lengths and creates drillable area for each
-  setback_lengths = seq(min_setback+setback_step, max_setback, setback_step)
-  for(setback_ft in setback_lengths) {
-    print(setback_ft)
-    setback_step_m = setback_step * FEET_TO_METERS
-    water_buffers = st_buffer(water_buffers, setback_step_m)
-    address_buffers = st_buffer(address_buffers, setback_step_m)
-    saveRDS(get_drillable_area(county, water_buffers), file.path(output_folder, county_name, paste0(county_name,"_", "drillable water_", setback_ft, ".rdata")))
-    saveRDS(get_drillable_area(county, address_buffers), file.path(output_folder, county_name, paste0(county_name,"_", "drillable addresses_", setback_ft, ".rdata")))
+  print("starting to create setback shape")
+  tme1 = proc.time()[3]
+  minimum_setbacks = do.call(c, list(st_buffer(st_crop(wetlands, bound_box), setback_m), st_buffer(st_crop(water_area, bound_box), setback_m),
+                                     st_buffer(st_crop(water_flow, bound_box), setback_m),st_buffer(st_crop(water_body, bound_box), setback_m),
+                                     st_union(st_buffer(st_crop(addresses, bound_box), setback_m))))
+  minimum_setbacks = st_union(minimum_setbacks)
+  print(paste("time to create setback shape was", proc.time()[3] - tme1))
+  return(minimum_setbacks)
+}
+##
+create_buffer_zones = function(min_setback_shape, county_name, output_folder) {
+  setback_add = SETBACK_STEP*FEET_TO_METERS
+  county_output_folder = file.path(output_folder, county_name)
+  dir.create(county_output_folder)
+  setback_shape = min_setback_shape
+  saveRDS(setback_shape, file.path(county_output_folder, paste0(county_name, "_setback_", MIN_SETBACK,".rdata")))
+  #
+  for(setback in  seq(MIN_SETBACK + SETBACK_STEP, MAX_SETBACK, SETBACK_STEP)) {
+    print(setback)
+    setback_shape = st_buffer(setback_shape, setback_add)
+    saveRDS(setback_shape, file.path(county_output_folder, paste0(county_name, "_setback_", setback,".rdata")))
   }
 }
+
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
@@ -104,11 +103,15 @@ county_names = as.character(county_shapefiles$NAME)
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
-#create drillable surface areas for each county. Takes several hours
-for(county_name in county_names) {
+#create drillable surface areas for each county. Takes several hours unless run in parallel
+county_subset = county_names[64:64]
+#No Rio Grand
+for(county_name in county_subset) {
   print(county_name)
   tme = proc.time()[3]
-  create_county_drillable_areas(county_name, county_shapefiles, wetlands, water_area, water_flow, water_body, addresses, 
-                                MIN_SETBACK, MAX_SETBACK, SETBACK_STEP, output_folder)
-  print(paste("Creating drillable areas for", county_name, "took", (proc.time()[3] - tme)/60, "minutes"))
+  create_buffer_zones(create_county_min_setback(county_name, county_shapefiles, wetlands, water_area, water_flow, water_body, addresses),
+                      county_name, output_folder)
+    print(paste("Creating setback areas for", county_name, "took", (proc.time()[3] - tme)/60, "minutes"))
 }
+
+
