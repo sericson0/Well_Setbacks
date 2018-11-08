@@ -20,6 +20,8 @@ Things to note:
 	   take the majority of computing time, but are conducted at the county level so can easily get a 64X speedup (number of counties).
 	3. Currently all setback areas are combined into a single shapefile (water and addresses). Can tweak Generate_Setbacks if you desire
 	   only one setback.
+	4. Code corrects for boarder effects within Colorado counties, so each county value is as if the code were run on the entire state.
+	   However, the code treats Colorado as if it were an island, meaning no potential drilling from neighboring states. 
 	
 Potential things to do
 	1. Add check for sufficient surface area to drill. Can do this in the Genearte_Horizontal_And_Summary_Stats, but will take some thinking
