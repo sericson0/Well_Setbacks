@@ -75,10 +75,20 @@ create_data_frame = function(county_name, setback_distances, horizontal_distance
   return(df)
 }
 ##
+get_area = function(shape) {
+  area = as.numeric(st_area(shape))
+  if(length(area) == 0) {
+    return(0)
+  } else{
+    return(area)
+  }
+
+}
+##
 county_shapefiles = readRDS(file.path(projected_folder, "county_shapefiles.rdata"))
 county_names = as.character(county_shapefiles$NAME)
 ##Loop through counties, setbacks and horizontal distances
-county_name_subset = county_names
+county_name_subset = county_names[1:64] #There are 64 counties. Subset for parallel processes
 for(county_name in county_name_subset) {
   tme = proc.time()[3]
   print(county_name)
@@ -86,29 +96,33 @@ for(county_name in county_name_subset) {
   dir.create(county_folder)
   county = st_geometry(county_shapefiles[which(county_shapefiles$NAME == county_name), ])
   df = create_data_frame(county_name, setback_distances, horizontal_distances)
-  county_area = st_area(county)
-  df$county_area_m2 = as.numeric(county_area)
+  county_area = get_area(county)
+  df$county_area_m2 = county_area
   ##
   for(setback in setback_distances) {
     print(setback)
     setback_shapes = readRDS(file.path(input_folder, county_name, paste0(county_name, "_setback_", setback,".rdata")))
-    drillable_surface_shapes = st_difference(get_bounding_box_shape(county, MAX_HORIZONTAL), setback_shapes)
+    #st_buffer of 0 converts any lines to polygons
+    drillable_surface_shapes = st_difference(get_bounding_box_shape(county, MAX_HORIZONTAL), st_buffer(setback_shapes, 0))
     drillable_surface_county = st_intersection(county, drillable_surface_shapes)
     saveRDS(drillable_surface_county, get_output_name(county_folder, county_name, setback, 0))
     #
-    drillable_surface_area = as.numeric(st_area(drillable_surface_county))
+    drillable_surface_area = get_area(drillable_surface_county)
+    rm(drillable_surface_county)
     df$drillable_surface_m2[which(df$setback == setback)] = drillable_surface_area
     df$drillable_surface_pct[which(df$setback == setback)] = drillable_surface_area/county_area
     df$drillable_underground_m2[which(df$setback == setback & df$horizontal == 0)] = drillable_surface_area
     df$drillable_underground_pct[which(df$setback == setback & df$horizontal == 0)] = drillable_surface_area/county_area
     ##
     drillable_underground_shapes = drillable_surface_shapes
+    rm(drillable_surface_shapes)
+    gc()
     #Exclude zero horizontal
     for(horizontal in horizontal_distances[-1]) {
-      print(horizontal)
+      # print(horizontal)
       drillable_underground_shapes = st_buffer(drillable_underground_shapes, HORIZONTAL_STEP*MILES_TO_METERS)
       drillable_underground_county = st_intersection(county, drillable_underground_shapes)
-      drillable_underground_area = as.numeric(st_area(drillable_underground_county))
+      drillable_underground_area = get_area(drillable_underground_county)
       df$drillable_underground_m2[which(df$setback == setback & df$horizontal == horizontal)] = drillable_underground_area
       df$drillable_underground_pct[which(df$setback == setback & df$horizontal == horizontal)] = drillable_underground_area/county_area
       saveRDS(drillable_underground_county, get_output_name(county_folder, county_name, setback, horizontal))
@@ -119,17 +133,4 @@ for(county_name in county_name_subset) {
   print(paste("Time to analyze", county_name, "was", (proc.time()[3]-tme)/60, "minutes."))
 }
 
-# weld = st_geometry(county_shapefiles[which(county_shapefiles$NAME == "Weld"), ])
-# 
-# pdf("p1.pdf", height = 6, width = 8)  
-# plot(readRDS(get_output_name(county_folder, "Weld", 250, 1)), col = "gray")
-# plot(weld, lwd = 3, add =T)
-# dev.off()
-# pdf("p2.pdf", height = 6, width = 8)  
-# plot(readRDS(get_output_name(county_folder, "Weld", 250, 2)), col = "gray")
-# plot(weld, lwd = 3, add =T)
-# dev.off()
-# pdf("p3.pdf", height = 6, width = 8)  
-# plot(readRDS(get_output_name(county_folder, "Weld", 250, 3)), col = "gray")
-# plot(weld, lwd = 3, add =T)
-# dev.off()
+
