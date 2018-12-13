@@ -22,16 +22,16 @@ setwd(WD)
 loadPackage("sf")
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
-#____________________________________________________________________________________________________________________
+source("./Constants.R")
 #Constants 
-FEET_TO_METERS = 0.3048
-MILES_TO_METERS = FEET_TO_METERS * 5280
-SIMPLIFY_TOLERANCE = 100
-MIN_SETBACK = 250
-MAX_SETBACK = 3500
-SETBACK_STEP = 250
-MAX_HORIZONTAL = 3
-HORIZONTAL_STEP = .25
+# FEET_TO_METERS 
+# MILES_TO_METERS 
+# SIMPLIFY_TOLERANCE
+# MIN_SETBACK 
+# MAX_SETBACK 
+# SETBACK_STEP
+# MAX_HORIZONTAL
+# HORIZONTAL_STEP
 ##
 #Folder paths. create new folders as needed
 main_folder = "Spatial Data"
@@ -104,7 +104,7 @@ county_names = as.character(county_shapefiles$NAME)
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
 #create drillable surface areas for each county. Takes several hours unless run in parallel
-county_subset = county_names[64:64]
+county_subset = county_names[1:length(county_names)]
 #No Rio Grand
 for(county_name in county_subset) {
   print(county_name)
