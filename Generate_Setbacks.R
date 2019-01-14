@@ -112,7 +112,7 @@ county_names = as.character(county_shapefiles$NAME)
 #____________________________________________________________________________________________________________________
 #create drillable surface areas for each county. Takes several hours unless run in parallel
 county_subset = county_names[1:length(county_names)]
-county_subset = "Weld"
+# county_subset = "Weld"
 #No Rio Grand
 for(county_name in county_subset) {
   print(county_name)

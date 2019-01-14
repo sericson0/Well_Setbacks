@@ -91,9 +91,9 @@ field_polygons = read_shapefile("field_polygons", folder_paths, layers)
 field_polygons = st_transform(field_polygons, projection_string)
 save_shapefile(field_polygons, "field_polygons", main_folder, save_folder)
 #Addresses take a couple of minutes to load, so be paitent.
-addresses = st_geometry(read_shapefile("addresses", folder_paths, layers))
-addresses = st_transform(addresses, projection_string)
-save_shapefile(addresses, "addresses", main_folder, save_folder)
+# addresses = st_geometry(read_shapefile("addresses", folder_paths, layers))
+# addresses = st_transform(addresses, projection_string)
+# save_shapefile(addresses, "addresses", main_folder, save_folder)
 
 #Microsoft Data
 microsoft_addresses = geojson_sf(file.path(main_folder, raw_data_folder, folder_paths$microsoft, "Colorado.geojson"))
