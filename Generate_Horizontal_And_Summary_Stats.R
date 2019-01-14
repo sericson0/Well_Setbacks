@@ -91,7 +91,7 @@ get_area = function(shape) {
 get_drillable_county_shape = function(county, shape, federal = NULL) {
   drillable_shape = st_intersection(county, shape)
   if(ADD_FEDERAl_LANDS == TRUE) {
-    drillable_shape = st_difference(drillable_shape, federal)
+    drillable_shape = st_buffer(st_difference(drillable_shape, st_buffer(federal,0)),0)
   }
   return(drillable_shape)
 }

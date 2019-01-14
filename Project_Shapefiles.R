@@ -16,6 +16,7 @@ WD = dirname(rstudioapi::getSourceEditorContext()$path)
 setwd(WD)
 ##
 loadPackage("sf")
+loadPackage("geojsonsf")
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
@@ -31,7 +32,8 @@ folder_paths = list("wetlands" = file.path("wetlands", "CO_geodatabase_wetlands.
                     "field_polygons" = "field_polygons", "water_area" = file.path("hydrology", "NHD_H_Colorado_State_GDB.gdb"),
                     "water_body" = file.path("hydrology", "NHD_H_Colorado_State_GDB.gdb"), 
                     "water_flow" = file.path("hydrology", "NHD_H_Colorado_State_GDB.gdb"),
-                    "addresses" = file.path("addresses", "CSAD2014PA.gdb"), "county_shapefiles" = "county_shapefiles")
+                    "addresses" = file.path("addresses", "CSAD2014PA.gdb"), "county_shapefiles" = "county_shapefiles",
+                    "microsoft" = "microsoft_buildings")
 #Layers is a list of layers to be extracted
 layers = list("wetlands" =  "CO_Riparian", "cogcc" = "Occupied_Structure_and_Vulnerable_Areas_Combined_2500ft_Buffer_Init_97",
               "federal_lands" = "Colorado_Federal_Lands_2018_SOURCE_BLM", "field_polygons" = "COGCC_Fields", 
@@ -92,6 +94,17 @@ save_shapefile(field_polygons, "field_polygons", main_folder, save_folder)
 addresses = st_geometry(read_shapefile("addresses", folder_paths, layers))
 addresses = st_transform(addresses, projection_string)
 save_shapefile(addresses, "addresses", main_folder, save_folder)
+
+#Microsoft Data
+microsoft_addresses = geojson_sf(file.path(main_folder, raw_data_folder, folder_paths$microsoft, "Colorado.geojson"))
+microsoft_addresses = st_transform(microsoft_addresses, projection_string)
+microsoft_centroids = st_centroid(microsoft_addresses)
+building_areas = st_area(microsoft_addresses)
+save_shapefile(microsoft_centroids, "microsoft_centroids", main_folder, save_folder)
+save_shapefile(microsoft_addresses, "microsoft_buildings", main_folder, save_folder)
+##
+
+
 ##_______________________________________________________________________________________________
 #keep county metadata for county names
 counties = read_shapefile("county_shapefiles", folder_paths, layers)
@@ -101,3 +114,25 @@ counties = st_transform(counties, projection_string)
 save_shapefile(counties, "county_shapefiles", main_folder, save_folder)
 
 
+# ba_1 = building_areas[which(as.numeric(building_areas) <= 1e3)]
+# 
+# pdf("Colorado Building Distribution.pdf", height = 6, width = 8)
+# hist(ba_1, breaks = 100, xlab = "Size (m^2)", probability = T, col = "gray", main = "Colorado Building Size Distribution")
+# dev.off()
+# 
+# 
+# pdf("building centroids.pdf", height = 6, width = 8)
+# plot(st_geometry(counties))
+# plot(microsoft_centroids, pch = ".", add = T)
+# dev.off()
+# 
+# pdf("Denver Buildings.pdf", height = 6, width = 8)
+# plot(st_geometry(counties[which(counties$NAME == "Denver"), ]))
+# plot(microsoft_addresses, col = "gray", add = T)
+# dev.off()
+# 
+# 
+# pdf("Denver Buildings_1.pdf", height = 6, width = 8)
+# plot(microsoft_addresses, col = "gray", xlim = c(500000,510000), ylim = c(4390000, 4400000))
+# dev.off()
+# 

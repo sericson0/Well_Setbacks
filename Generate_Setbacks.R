@@ -57,7 +57,7 @@ get_bounding_box = function(county, max_setback, max_horizontal) {
 
 
 create_county_min_setback = function(county_name, county_shapefiles, wetlands, water_area, water_flow, water_body, addresses) {
-  county = county = st_geometry(county_shapefiles[which(county_shapefiles$NAME == county_name),])
+  county = st_geometry(county_shapefiles[which(county_shapefiles$NAME == county_name),])
   bound_box = get_bounding_box(county, MAX_SETBACK, MAX_HORIZONTAL)
   setback_m = MIN_SETBACK*FEET_TO_METERS
   #
@@ -65,7 +65,7 @@ create_county_min_setback = function(county_name, county_shapefiles, wetlands, w
   tme1 = proc.time()[3]
   minimum_setbacks = do.call(c, list(st_buffer(st_crop(wetlands, bound_box), setback_m), st_buffer(st_crop(water_area, bound_box), setback_m),
                                      st_buffer(st_crop(water_flow, bound_box), setback_m),st_buffer(st_crop(water_body, bound_box), setback_m),
-                                     st_union(st_buffer(st_crop(addresses, bound_box), setback_m))))
+                                     st_union(st_buffer(st_crop(st_buffer(addresses,0), bound_box), setback_m))))
   minimum_setbacks = st_union(minimum_setbacks)
   print(paste("time to create setback shape was", proc.time()[3] - tme1))
   return(minimum_setbacks)
@@ -97,7 +97,14 @@ water_area = st_simplify(water_area, dTolerance = SIMPLIFY_TOLERANCE)
 water_body = cast_data("water_body", input_folder)
 water_body = st_simplify(water_body, dTolerance = SIMPLIFY_TOLERANCE)
 water_flow = readRDS(file.path(input_folder, "water_flow.rdata"))
-addresses = readRDS(file.path(input_folder, "addresses.rdata"))
+
+if(USE_MICROSOFT_DATA == TRUE) {
+  addresses = readRDS(file.path(input_folder, "microsoft_buildings.rdata"))
+} else {
+  addresses = readRDS(file.path(input_folder, "addresses.rdata"))
+}
+
+
 county_shapefiles = readRDS(file.path(input_folder, "county_shapefiles.rdata"))
 county_names = as.character(county_shapefiles$NAME)
 #____________________________________________________________________________________________________________________
@@ -105,6 +112,7 @@ county_names = as.character(county_shapefiles$NAME)
 #____________________________________________________________________________________________________________________
 #create drillable surface areas for each county. Takes several hours unless run in parallel
 county_subset = county_names[1:length(county_names)]
+county_subset = "Weld"
 #No Rio Grand
 for(county_name in county_subset) {
   print(county_name)
