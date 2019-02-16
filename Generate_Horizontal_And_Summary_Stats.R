@@ -89,7 +89,7 @@ get_area = function(shape) {
 }
 ##
 get_drillable_county_shape = function(county, shape, federal = NULL) {
-  drillable_shape = st_intersection(county, shape)
+  drillable_shape = st_intersection(county, st_buffer(shape,0))
   if(ADD_FEDERAl_LANDS == TRUE) {
     drillable_shape = st_buffer(st_difference(drillable_shape, st_buffer(federal,0)),0)
   }
@@ -113,7 +113,7 @@ if(SUBSET_FEDERAL_LANDS_TO_BLM == TRUE) {
 county_shapefiles = readRDS(file.path(projected_folder, "county_shapefiles.rdata"))
 county_names = as.character(county_shapefiles$NAME)
 ##Loop through counties, setbacks and horizontal distances
-county_name_subset = county_names[1:length(county_names)] #There are 64 counties. Subset for parallel processes
+county_name_subset = county_names[which(county_names == "Garfield")] #There are 64 counties. Subset for parallel processes
 for(county_name in county_name_subset) {
   tme = proc.time()[3]
   print(county_name)
@@ -123,7 +123,7 @@ for(county_name in county_name_subset) {
   df = create_data_frame(county_name, setback_distances, horizontal_distances)
   county_area = get_area(county)
   df$county_area_m2 = county_area
-  df$federal_lands_m2 = get_area(st_intersection(county, federal_lands))
+  df$federal_lands_m2 = get_area(st_intersection(county, st_buffer(federal_lands,0)))
   df$non_federal_county_area_m2 = df$county_area_m2[1] - df$federal_lands_m2[1]
   ##
   if(ADD_FEDERAl_LANDS == TRUE) {
