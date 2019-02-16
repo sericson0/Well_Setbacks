@@ -64,7 +64,6 @@ projection_string = as.character(st_crs(cogcc_setbacks))[2]
 ##
 wetlands = st_geometry(read_shapefile("wetlands", folder_paths, layers))
 wetlands = st_transform(wetlands, projection_string)
-wetlands = st_union(wetlands)
 save_shapefile(wetlands, "wetlands", main_folder, save_folder)
 ##
 water_area = st_geometry(read_shapefile("water_area", folder_paths, layers))

@@ -43,16 +43,18 @@ download_data = function(url, name, main_folder, zip_folder, save_folder) {
   print(paste(name,"data saved in", file.path(main_folder, save_folder,name)))
   
 }
+##
+#BLM data must be manually loaded from 
+#https://navigator.blm.gov/data?keyword=surface&format=Data%20in%20a%20File%20Geodatabase%20(FileGDB%20Data)!!Compressed%20Archive%20File%20(ZIP)&fs_publicRegion=Colorado
+
 #Download and unzip data from online
 #hydrology data
 download_data("https://prd-tnm.s3.amazonaws.com/StagedProducts/Hydrography/NHD/State/HighResolution/GDB/NHD_H_Colorado_State_GDB.zip", "hydrology",
               main_folder, zip_folder, save_folder)
-#Address Data
-download_data("https://data.colorado.gov/api/views/sgcm-yvhh/files/de2270be-ae32-4768-a121-e9f33a6d8b9b?filename=CSAD2018PA.zip", "addresses",
-              main_folder, zip_folder, save_folder)
-download_data("https://data.colorado.gov/api/geospatial/n7je-akky?method=export&format=Shapefile", "addresses",
-              main_folder, zip_folder, save_folder)
-
+# #Address Data
+# download_data("https://data.colorado.gov/api/geospatial/n7je-akky?method=export&format=Shapefile", "addresses",
+#               main_folder, zip_folder, save_folder)
+# 
 
 #Microsoft Building Data
 download_data("https://usbuildingdata.blob.core.windows.net/usbuildings-v1-1/Colorado.zip", "microsoft_buildings",
