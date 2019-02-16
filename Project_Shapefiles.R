@@ -33,12 +33,12 @@ folder_paths = list("wetlands" = file.path("wetlands", "CO_geodatabase_wetlands.
                     "water_body" = file.path("hydrology", "NHD_H_Colorado_State_GDB.gdb"), 
                     "water_flow" = file.path("hydrology", "NHD_H_Colorado_State_GDB.gdb"),
                     "addresses" = file.path("addresses", "CSAD2014PA.gdb"), "county_shapefiles" = "county_shapefiles",
-                    "microsoft" = "microsoft_buildings")
+                    "microsoft" = "microsoft_buildings", "blm" = "blm_federal")
 #Layers is a list of layers to be extracted
 layers = list("wetlands" =  "CO_Riparian", "cogcc" = "Occupied_Structure_and_Vulnerable_Areas_Combined_2500ft_Buffer_Init_97",
               "federal_lands" = "Colorado_Federal_Lands_2018_SOURCE_BLM", "field_polygons" = "COGCC_Fields", 
               "water_area" = "NHDArea", "water_flow" = "NHDFlowline", "water_body" = "NHDWaterbody",
-              "addresses" = "CSAD2014PA", "county_shapefiles" = "cb_2017_us_county_5m")
+              "addresses" = "CSAD2014PA", "county_shapefiles" = "cb_2017_us_county_5m", "blm" = "BLM_CO_SMA_20181221")
 ##_______________________________________________________________________________________________
 ##_______________________________________________________________________________________________
 ##_______________________________________________________________________________________________
@@ -113,25 +113,14 @@ counties = st_transform(counties, projection_string)
 save_shapefile(counties, "county_shapefiles", main_folder, save_folder)
 
 
-# ba_1 = building_areas[which(as.numeric(building_areas) <= 1e3)]
-# 
-# pdf("Colorado Building Distribution.pdf", height = 6, width = 8)
-# hist(ba_1, breaks = 100, xlab = "Size (m^2)", probability = T, col = "gray", main = "Colorado Building Size Distribution")
+blm = read_shapefile("blm", folder_paths, layers)
+blm = blm[which(blm$adm_manage == "BLM"), ]
+blm = st_transform(blm, projection_string)
+blm = st_union(blm)
+save_shapefile(blm, "blm", main_folder, save_folder)
+
+
+# pdf("BLM vs all Federal.pdf", height = 6, width = 8)
+# plot(st_geometry(federal_lands), col = "gray")
+# plot(st_geometry(blm), col = rgb(1,0,0,.5),  add = TRUE)
 # dev.off()
-# 
-# 
-# pdf("building centroids.pdf", height = 6, width = 8)
-# plot(st_geometry(counties))
-# plot(microsoft_centroids, pch = ".", add = T)
-# dev.off()
-# 
-# pdf("Denver Buildings.pdf", height = 6, width = 8)
-# plot(st_geometry(counties[which(counties$NAME == "Denver"), ]))
-# plot(microsoft_addresses, col = "gray", add = T)
-# dev.off()
-# 
-# 
-# pdf("Denver Buildings_1.pdf", height = 6, width = 8)
-# plot(microsoft_addresses, col = "gray", xlim = c(500000,510000), ylim = c(4390000, 4400000))
-# dev.off()
-# 
