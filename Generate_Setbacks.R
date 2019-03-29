@@ -1,5 +1,6 @@
-#This code takes in transformed shapefiles and returns the drillable surface area for each county. 
-#Return files are drillable area if only addresses have setbacks and drillable area if only water has setbacks
+#This code takes in transformed shapefiles and returns the drillable surface area for each county.
+#For each county, the relevant objects which create setbacks are combined (Applicable areas outside of the county are included as long as they are within Colorado).
+#Then, for each setback distance a buffer zone is created. 
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
@@ -98,11 +99,7 @@ water_body = cast_data("water_body", input_folder)
 water_body = st_simplify(water_body, dTolerance = SIMPLIFY_TOLERANCE)
 water_flow = readRDS(file.path(input_folder, "water_flow.rdata"))
 
-if(USE_MICROSOFT_DATA == TRUE) {
-  addresses = readRDS(file.path(input_folder, "microsoft_buildings.rdata"))
-} else {
-  addresses = readRDS(file.path(input_folder, "addresses.rdata"))
-}
+addresses = readRDS(file.path(input_folder, "microsoft_buildings.rdata"))
 
 
 county_shapefiles = readRDS(file.path(input_folder, "county_shapefiles.rdata"))
@@ -111,9 +108,8 @@ county_names = as.character(county_shapefiles$NAME)
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
 #create drillable surface areas for each county. Takes several hours unless run in parallel
-county_subset = county_names[1:length(county_names)]
-# county_subset = "Weld"
-#No Rio Grand
+# county_subset = county_names[1:length(county_names)]
+county_subset = county_names[1]
 for(county_name in county_subset) {
   print(county_name)
   tme = proc.time()[3]

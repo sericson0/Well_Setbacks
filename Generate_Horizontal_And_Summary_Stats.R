@@ -104,16 +104,12 @@ remove_small_surface_areas = function(multipoly, min_wellpad_acres) {
   return(st_union(poly))
 }
 ##
-if(SUBSET_FEDERAL_LANDS_TO_BLM == TRUE) {
-  federal_lands = readRDS(file.path(projected_folder, "blm.rdata"))
-} else {
-  federal_lands = readRDS(file.path(projected_folder, "federal_lands.rdata"))
-}
+federal_lands = readRDS(file.path(projected_folder, "blm.rdata"))
 
 county_shapefiles = readRDS(file.path(projected_folder, "county_shapefiles.rdata"))
 county_names = as.character(county_shapefiles$NAME)
 ##Loop through counties, setbacks and horizontal distances
-county_name_subset = county_names[which(county_names == "Garfield")] #There are 64 counties. Subset for parallel processes
+county_name_subset = county_names[which(county_names == "Chaffee"):64] #There are 64 counties. Subset for parallel processes
 for(county_name in county_name_subset) {
   tme = proc.time()[3]
   print(county_name)
@@ -176,9 +172,4 @@ for(county_name in county_name_subset) {
   print(paste("Time to analyze", county_name, "was", (proc.time()[3]-tme)/60, "minutes."))
 }
 ##
-# D = readRDS(file.path(county_folder, "Conejos_setback_1000_horizontal_0.rdata"))
-# pdf("map2.pdf", width = 8, height = 6)
-# plot(county)
-# plot(D, add = T, col = "gray")
-# # plot(federal_lands, add = T, col = "orange")
-# dev.off()
+

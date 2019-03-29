@@ -1,5 +1,6 @@
 #This code reads in raw data, transforms to given projection (default projection is given by COGCC study),
 #and drops z coordinates where necessary. Saves projected data as .rdata files in save_folder (default projected data)
+#Code takes around 10-15 minutes to run
 rm(list = ls())
 ##
 #installs package if not currently installed
@@ -20,25 +21,29 @@ loadPackage("geojsonsf")
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
-FIPS_NUM = "08" #08 is for ColoradoChange if looking at a differe
+FIPS_NUM = "08" #08 is for ColoradoChange if looking at a different county then changer FIPS NUM
 main_folder = "Spatial Data"
 raw_data_folder = "Raw Unzipped Data"
 save_folder = "Projected Data"
 dir.create(file.path(main_folder, save_folder))
 ##
 #Folder paths is list of where data is saved to from Download_Data.R code
-folder_paths = list("wetlands" = file.path("wetlands", "CO_geodatabase_wetlands.gdb"), "cogcc" = file.path("cogcc_data", "2018_Init_97_2500ft_Buffer_Zones.gdb" ),
-                    "federal_lands" = file.path("cogcc_data", "2018_Init_97_2500ft_Buffer_Zones.gdb" ),
-                    "field_polygons" = "field_polygons", "water_area" = file.path("hydrology", "NHD_H_Colorado_State_GDB.gdb"),
+folder_paths = list("wetlands" = file.path("wetlands", "CO_geodatabase_wetlands.gdb"), 
+                    "cogcc" = file.path("cogcc_data", "2018_Init_97_2500ft_Buffer_Zones.gdb" ),
+                    "water_area" = file.path("hydrology", "NHD_H_Colorado_State_GDB.gdb"),
                     "water_body" = file.path("hydrology", "NHD_H_Colorado_State_GDB.gdb"), 
                     "water_flow" = file.path("hydrology", "NHD_H_Colorado_State_GDB.gdb"),
-                    "addresses" = file.path("addresses", "CSAD2014PA.gdb"), "county_shapefiles" = "county_shapefiles",
-                    "microsoft" = "microsoft_buildings", "blm" = "blm_federal")
+                    "county_shapefiles" = "county_shapefiles",
+                    "microsoft" = "microsoft_buildings", 
+                    "blm" = "blm")
 #Layers is a list of layers to be extracted
-layers = list("wetlands" =  "CO_Riparian", "cogcc" = "Occupied_Structure_and_Vulnerable_Areas_Combined_2500ft_Buffer_Init_97",
-              "federal_lands" = "Colorado_Federal_Lands_2018_SOURCE_BLM", "field_polygons" = "COGCC_Fields", 
-              "water_area" = "NHDArea", "water_flow" = "NHDFlowline", "water_body" = "NHDWaterbody",
-              "addresses" = "CSAD2014PA", "county_shapefiles" = "cb_2017_us_county_5m", "blm" = "BLM_CO_SMA_20181221")
+layers = list("wetlands" =  "CO_Riparian", 
+              "cogcc" = "Occupied_Structure_and_Vulnerable_Areas_Combined_2500ft_Buffer_Init_97",
+              "water_area" = "NHDArea", 
+              "water_flow" = "NHDFlowline", 
+              "water_body" = "NHDWaterbody",
+              "county_shapefiles" = "cb_2017_us_county_5m", 
+              "blm" = "BLM_CO_SMA_20181221")
 ##_______________________________________________________________________________________________
 ##_______________________________________________________________________________________________
 ##_______________________________________________________________________________________________
@@ -52,15 +57,15 @@ save_shapefile = function(shapes, name, main_folder, save_folder) {
 ##_______________________________________________________________________________________________
 ##_______________________________________________________________________________________________
 ##_______________________________________________________________________________________________
-#These shapefiles are in default projection so do not need to be projected. Only geometries are extracted
+#Use for projection string and for comparison, otherwise not required in analysis.
+#Projection string is "+proj=utm +zone=13 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs" 
 cogcc_setbacks = st_geometry(read_shapefile("cogcc", folder_paths, layers))
-federal_lands = st_geometry(read_shapefile("federal_lands", folder_paths, layers))
 
+#set projections to cogcc projection
+projection_string = as.character(st_crs(cogcc_setbacks))[2]
 ##
 save_shapefile(cogcc_setbacks, "cogcc_setbacks", main_folder, save_folder)
-save_shapefile(federal_lands, "federal_lands", main_folder, save_folder)
-#set projections to cogcc initial report projection
-projection_string = as.character(st_crs(cogcc_setbacks))[2]
+
 ##
 wetlands = st_geometry(read_shapefile("wetlands", folder_paths, layers))
 wetlands = st_transform(wetlands, projection_string)
@@ -82,45 +87,26 @@ water_flow = st_zm(water_flow)
 save_shapefile(water_flow, "water_flow", main_folder, save_folder)
 
 rm(water_flow); gc() #free up memory space
-#Oil field shapefiles
-# ogrListLayers(field_folder)
-# field_polygons = st_geometry(read_shapefile("field_polygons", folder_paths, layers))
-#Keep field polygon metadata
-field_polygons = read_shapefile("field_polygons", folder_paths, layers)
-field_polygons = st_transform(field_polygons, projection_string)
-save_shapefile(field_polygons, "field_polygons", main_folder, save_folder)
-#Addresses take a couple of minutes to load, so be paitent.
-# addresses = st_geometry(read_shapefile("addresses", folder_paths, layers))
-# addresses = st_transform(addresses, projection_string)
-# save_shapefile(addresses, "addresses", main_folder, save_folder)
+
+
 
 #Microsoft Data
+#For some large non-Colorado shapefiles the file may be too big for geojson_sf (reaches string limit for texas). For these states the geojson file 
+#may be split, loaded separately, and then recombined once loaded into R. 
+#If looking at non-Colorado state then change Colorado.geojson below to desired State.
 microsoft_addresses = geojson_sf(file.path(main_folder, raw_data_folder, folder_paths$microsoft, "Colorado.geojson"))
 microsoft_addresses = st_transform(microsoft_addresses, projection_string)
-microsoft_centroids = st_centroid(microsoft_addresses)
-building_areas = st_area(microsoft_addresses)
-save_shapefile(microsoft_centroids, "microsoft_centroids", main_folder, save_folder)
 save_shapefile(microsoft_addresses, "microsoft_buildings", main_folder, save_folder)
 ##
-
-
-##_______________________________________________________________________________________________
-#keep county metadata for county names
+#Project county data
 counties = read_shapefile("county_shapefiles", folder_paths, layers)
-
 counties = counties[which(counties$STATEFP %in% FIPS_NUM), ]
 counties = st_transform(counties, projection_string)
 save_shapefile(counties, "county_shapefiles", main_folder, save_folder)
 
-
+##Project BLM Data
 blm = read_shapefile("blm", folder_paths, layers)
 blm = blm[which(blm$adm_manage == "BLM"), ]
 blm = st_transform(blm, projection_string)
 blm = st_union(blm)
 save_shapefile(blm, "blm", main_folder, save_folder)
-
-
-# pdf("BLM vs all Federal.pdf", height = 6, width = 8)
-# plot(st_geometry(federal_lands), col = "gray")
-# plot(st_geometry(blm), col = rgb(1,0,0,.5),  add = TRUE)
-# dev.off()
