@@ -104,9 +104,14 @@ counties = counties[which(counties$STATEFP %in% FIPS_NUM), ]
 counties = st_transform(counties, projection_string)
 save_shapefile(counties, "county_shapefiles", main_folder, save_folder)
 
-##Project BLM Data
-blm = read_shapefile("blm", folder_paths, layers)
-blm = blm[which(blm$adm_manage == "BLM"), ]
+##Project BLM Federal Land Data
+federal = read_shapefile("blm", folder_paths, layers)
+blm = federal[which(federal$adm_manage == "BLM"), ]
 blm = st_transform(blm, projection_string)
 blm = st_union(blm)
 save_shapefile(blm, "blm", main_folder, save_folder)
+##
+federal = st_transform(federal, projection_string)
+federal = st_union(federal)
+save_shapefile(federal, "federal", main_folder, save_folder)
+

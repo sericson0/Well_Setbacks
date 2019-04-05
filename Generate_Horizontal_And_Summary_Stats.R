@@ -90,9 +90,7 @@ get_area = function(shape) {
 ##
 get_drillable_county_shape = function(county, shape, federal = NULL) {
   drillable_shape = st_intersection(county, st_buffer(shape,0))
-  if(ADD_FEDERAl_LANDS == TRUE) {
-    drillable_shape = st_buffer(st_difference(drillable_shape, st_buffer(federal,0)),0)
-  }
+  drillable_shape = st_buffer(st_difference(drillable_shape, st_buffer(federal,0)),0)
   return(drillable_shape)
 }
 
@@ -104,44 +102,55 @@ remove_small_surface_areas = function(multipoly, min_wellpad_acres) {
   return(st_union(poly))
 }
 ##
-federal_lands = readRDS(file.path(projected_folder, "blm.rdata"))
+blm_lands = readRDS(file.path(projected_folder, "blm.rdata"))
+federal_lands = readRDS(file.path(projected_folder, "federal.rdata"))
 
 county_shapefiles = readRDS(file.path(projected_folder, "county_shapefiles.rdata"))
 county_names = as.character(county_shapefiles$NAME)
 ##Loop through counties, setbacks and horizontal distances
-county_name_subset = county_names[which(county_names == "Chaffee"):64] #There are 64 counties. Subset for parallel processes
+county_name_subset = county_names[which(county_names == "Montrose"):64] #there are 64 counties. Subset for parallel processes
 for(county_name in county_name_subset) {
   tme = proc.time()[3]
   print(county_name)
   county_folder = file.path(output_folder, county_name) 
   dir.create(county_folder)
+  #subset to county
   county = st_geometry(county_shapefiles[which(county_shapefiles$NAME == county_name), ])
+  county_bound_box =  get_bounding_box_shape(county, MAX_HORIZONTAL)
+  blm_county_bound_box = st_intersection(st_buffer(blm_lands, 0), county_bound_box)
+  blm_county = st_intersection(blm_county_bound_box, county)
+  federal_county = st_intersection(county, st_buffer(federal_lands, 0))
+  #
   df = create_data_frame(county_name, setback_distances, horizontal_distances)
   county_area = get_area(county)
   df$county_area_m2 = county_area
-  df$federal_lands_m2 = get_area(st_intersection(county, st_buffer(federal_lands,0)))
+  df$federal_lands_m2 = get_area(federal_county)
+  df$blm_lands_m2 = get_area(blm_county)
   df$non_federal_county_area_m2 = df$county_area_m2[1] - df$federal_lands_m2[1]
   ##
-  if(ADD_FEDERAl_LANDS == TRUE) {
-    #Gets either full county area or area not off-limits from federal land
-    county_area = df$non_federal_county_area_m2[1]
-  }
+  #Gets either full county area or area not off-limits from federal land
+  county_area = df$non_federal_county_area_m2[1]
   ##
+
   for(setback in setback_distances) {
+    t = proc.time()[3]
     print(setback)
     setback_shapes = readRDS(file.path(input_folder, county_name, paste0(county_name, "_setback_", setback,".rdata")))
     #st_buffer of 0 converts any lines to polygons
     drillable_surface_shapes = st_difference(get_bounding_box_shape(county, MAX_HORIZONTAL), st_buffer(setback_shapes, 0))
+    #Add BLM land back in
+    drillable_surface_shapes = st_union(st_difference(st_buffer(drillable_surface_shapes, 0), st_buffer(federal_county,0)), st_buffer(blm_county_bound_box, 0))
     #
     if(REMOVE_SMALL_AREAS == TRUE) {
       drillable_surface_shapes = remove_small_surface_areas(drillable_surface_shapes, MIN_WELLPAD_ACRES)
     }
     #
-    drillable_surface_county = get_drillable_county_shape(county, drillable_surface_shapes, federal_lands)
+    #Remove federal lands and subset to county
+    
+    drillable_surface_county = get_drillable_county_shape(st_buffer(county,0), st_buffer(drillable_surface_shapes,0), st_buffer(federal_county, 0))
     saveRDS(drillable_surface_county, get_output_name(county_folder, county_name, setback, 0))
     #
     drillable_surface_area = get_area(drillable_surface_county)
-    
     df$drillable_surface_m2[which(df$setback == setback)] = drillable_surface_area
     df$drillable_surface_pct[which(df$setback == setback)] = drillable_surface_area/county_area
     df$drillable_underground_m2[which(df$setback == setback & df$horizontal == 0)] = drillable_surface_area
@@ -152,21 +161,24 @@ for(county_name in county_name_subset) {
     drillable_underground_shapes = drillable_surface_shapes
     rm(drillable_surface_shapes)
     gc()
+    print(paste("time for setback preprocessing", t - tme))
     #Exclude zero horizontal
     for(horizontal in horizontal_distances[-1]) {
       # print(horizontal)
-      if(ADD_FEDERAl_LANDS == TRUE) {
-        drillable_underground_shapes = st_union(drillable_underground_shapes, federal_lands)
-      }
+      #buffer area to generate horizontal setback
+      t = proc.time()[3]
       drillable_underground_shapes = st_buffer(drillable_underground_shapes, HORIZONTAL_STEP*MILES_TO_METERS)
-      drillable_underground_county = get_drillable_county_shape(county, drillable_underground_shapes, federal_lands)
+      # print(paste("horizontal 1", round((proc.time()[3]-t)/60, 2)))
+      t = proc.time()[3]
+      drillable_underground_county = get_drillable_county_shape(county, drillable_underground_shapes, st_buffer(federal_county, 0 ))
+      # print(paste("horizontal 2", round((proc.time()[3]-t)/60, 2)))
       #
       drillable_underground_area = get_area(drillable_underground_county)
       df$drillable_underground_m2[which(df$setback == setback & df$horizontal == horizontal)] = drillable_underground_area
       df$drillable_underground_pct[which(df$setback == setback & df$horizontal == horizontal)] = drillable_underground_area/county_area
       saveRDS(drillable_underground_county, get_output_name(county_folder, county_name, setback, horizontal))
+      # print(paste("horizontal times", proc.time()[3]-t))
     }
-    
   }
   write.csv(df, file.path(summary_stats_folder, paste0(county_name, ".csv")), row.names =FALSE)
   print(paste("Time to analyze", county_name, "was", (proc.time()[3]-tme)/60, "minutes."))
