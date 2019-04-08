@@ -15,6 +15,7 @@ WD = dirname(rstudioapi::getSourceEditorContext()$path)
 setwd(WD)
 ##
 loadPackage("sf")
+loadPackage("lwgeom")
 #____________________________________________________________________________________________________________________
 #____________________________________________________________________________________________________________________
 #Constants include :
@@ -89,10 +90,14 @@ get_area = function(shape) {
 }
 ##
 get_drillable_county_shape = function(county, shape, federal = NULL) {
-  drillable_shape = st_intersection(st_buffer(county,0), st_buffer(shape,0))
-  drillable_shape = st_buffer(st_difference(st_buffer(drillable_shape,0), st_buffer(federal,0)),0)
+  shape = st_make_valid(st_set_precision(st_buffer(shape,0), 1e3))
+  county = st_make_valid(st_set_precision(st_buffer(county,0), 1e3))
+  federal = st_make_valid(st_set_precision(st_buffer(federal,0), 1e3))
+  drillable_shape = st_make_valid(st_intersection(shape, county))
+  drillable_shape = st_difference(drillable_shape, federal)
   return(drillable_shape)
 }
+
 
 ##
 #gets rid of small areas where a well pad could not be placed
@@ -107,8 +112,14 @@ federal_lands = readRDS(file.path(projected_folder, "federal.rdata"))
 
 county_shapefiles = readRDS(file.path(projected_folder, "county_shapefiles.rdata"))
 county_names = as.character(county_shapefiles$NAME)
+
+
+plot(st_geometry(county_shapefiles))
+plot(blm_lands, add = T, col = "gray")
+plot(federal_lands, add = T, col = "gray")
+
 ##Loop through counties, setbacks and horizontal distances
-county_name_subset = county_names[which(county_names == "Montrose"):64] #there are 64 counties. Subset for parallel processes
+county_name_subset = county_names[which(county_names == "Morgan"):64] #there are 64 counties. Subset for parallel processes
 for(county_name in county_name_subset) {
   tme = proc.time()[3]
   print(county_name)
@@ -147,7 +158,7 @@ for(county_name in county_name_subset) {
     #
     #Remove federal lands and subset to county
     
-    drillable_surface_county = get_drillable_county_shape(st_buffer(county,0), st_buffer(drillable_surface_shapes,0), st_buffer(federal_county, 0))
+    drillable_surface_county = get_drillable_county_shape(county, drillable_surface_shapes, federal_county)
     saveRDS(drillable_surface_county, get_output_name(county_folder, county_name, setback, 0))
     #
     drillable_surface_area = get_area(drillable_surface_county)
@@ -170,7 +181,7 @@ for(county_name in county_name_subset) {
       drillable_underground_shapes = st_buffer(drillable_underground_shapes, HORIZONTAL_STEP*MILES_TO_METERS)
       # print(paste("horizontal 1", round((proc.time()[3]-t)/60, 2)))
       t = proc.time()[3]
-      drillable_underground_county = get_drillable_county_shape(county, drillable_underground_shapes, st_buffer(federal_county, 0 ))
+      drillable_underground_county = get_drillable_county_shape(county, drillable_underground_shapes, federal_county)
       # print(paste("horizontal 2", round((proc.time()[3]-t)/60, 2)))
       #
       drillable_underground_area = get_area(drillable_underground_county)
