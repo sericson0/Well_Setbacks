@@ -113,13 +113,13 @@ federal_lands = readRDS(file.path(projected_folder, "federal.rdata"))
 county_shapefiles = readRDS(file.path(projected_folder, "county_shapefiles.rdata"))
 county_names = as.character(county_shapefiles$NAME)
 
-
-plot(st_geometry(county_shapefiles))
-plot(blm_lands, add = T, col = "gray")
-plot(federal_lands, add = T, col = "gray")
+# 
+# plot(st_geometry(county_shapefiles))
+# plot(blm_lands, add = T, col = "gray")
+# plot(federal_lands, add = T, col = "gray")
 
 ##Loop through counties, setbacks and horizontal distances
-county_name_subset = county_names[which(county_names == "Morgan"):64] #there are 64 counties. Subset for parallel processes
+county_name_subset = county_names[1:64] #there are 64 counties. Subset for parallel processes
 for(county_name in county_name_subset) {
   tme = proc.time()[3]
   print(county_name)
@@ -172,17 +172,12 @@ for(county_name in county_name_subset) {
     drillable_underground_shapes = drillable_surface_shapes
     rm(drillable_surface_shapes)
     gc()
-    print(paste("time for setback preprocessing", t - tme))
     #Exclude zero horizontal
     for(horizontal in horizontal_distances[-1]) {
       # print(horizontal)
       #buffer area to generate horizontal setback
-      t = proc.time()[3]
       drillable_underground_shapes = st_buffer(drillable_underground_shapes, HORIZONTAL_STEP*MILES_TO_METERS)
-      # print(paste("horizontal 1", round((proc.time()[3]-t)/60, 2)))
-      t = proc.time()[3]
       drillable_underground_county = get_drillable_county_shape(county, drillable_underground_shapes, federal_county)
-      # print(paste("horizontal 2", round((proc.time()[3]-t)/60, 2)))
       #
       drillable_underground_area = get_area(drillable_underground_county)
       df$drillable_underground_m2[which(df$setback == setback & df$horizontal == horizontal)] = drillable_underground_area
@@ -190,6 +185,7 @@ for(county_name in county_name_subset) {
       saveRDS(drillable_underground_county, get_output_name(county_folder, county_name, setback, horizontal))
       # print(paste("horizontal times", proc.time()[3]-t))
     }
+    print(paste("Time for setback distance", setback, "was", round((proc.time()[3] - t)/60,2), "minutes"))
   }
   write.csv(df, file.path(summary_stats_folder, paste0(county_name, ".csv")), row.names =FALSE)
   print(paste("Time to analyze", county_name, "was", (proc.time()[3]-tme)/60, "minutes."))
