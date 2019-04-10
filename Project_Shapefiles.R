@@ -106,7 +106,9 @@ save_shapefile(counties, "county_shapefiles", main_folder, save_folder)
 
 ##Project BLM Federal Land Data
 federal = read_shapefile("blm", folder_paths, layers)
-blm = federal[which(federal$adm_manage == "BLM"), ]
+federal = federal[which(federal$adm_code %in% c("BOR","DOD","BLM","USFS","OTHER","USFW","USFS_LU","BLM_LU","BIA","USFS_NG","NPS")), ]
+
+blm = federal[which(federal$adm_manage %in% c("BLM", "BLM_LU")), ]
 blm = st_transform(blm, projection_string)
 blm = st_union(blm)
 save_shapefile(blm, "blm", main_folder, save_folder)
@@ -114,4 +116,6 @@ save_shapefile(blm, "blm", main_folder, save_folder)
 federal = st_transform(federal, projection_string)
 federal = st_union(federal)
 save_shapefile(federal, "federal", main_folder, save_folder)
+
+
 
