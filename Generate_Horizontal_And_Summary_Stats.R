@@ -90,9 +90,9 @@ get_area = function(shape) {
 }
 ##
 get_drillable_county_shape = function(county, shape, federal = NULL) {
-  shape = st_make_valid(st_set_precision(st_buffer(shape,0), 1e3))
-  county = st_make_valid(st_set_precision(st_buffer(county,0), 1e3))
-  federal = st_make_valid(st_set_precision(st_buffer(federal,0), 1e3))
+  shape = st_make_valid(st_set_precision(st_buffer(shape,0), 1e4))
+  county = st_make_valid(st_set_precision(st_buffer(county,0), 1e4))
+  federal = st_make_valid(st_set_precision(st_buffer(federal,0), 1e4))
   drillable_shape = st_make_valid(st_intersection(shape, county))
   drillable_shape = st_difference(drillable_shape, federal)
   return(drillable_shape)
@@ -113,13 +113,11 @@ federal_lands = readRDS(file.path(projected_folder, "federal.rdata"))
 county_shapefiles = readRDS(file.path(projected_folder, "county_shapefiles.rdata"))
 county_names = as.character(county_shapefiles$NAME)
 
-# 
-# plot(st_geometry(county_shapefiles))
-# plot(blm_lands, add = T, col = "gray")
-# plot(federal_lands, add = T, col = "gray")
+
 
 ##Loop through counties, setbacks and horizontal distances
-county_name_subset = county_names[1:64] #there are 64 counties. Subset for parallel processes
+county_name_subset = county_names[which(county_names == "Sedgwick"):which(county_names == "Bent")] #there are 64 counties. Subset for parallel processes
+# county_name_subset = c("Elbert", "Phillips", "Cheyenne", "Hinsdale","Arapahoe")
 for(county_name in county_name_subset) {
   tme = proc.time()[3]
   print(county_name)
@@ -131,6 +129,14 @@ for(county_name in county_name_subset) {
   blm_county_bound_box = st_intersection(st_buffer(blm_lands, 0), county_bound_box)
   blm_county = st_intersection(blm_county_bound_box, county)
   federal_county = st_intersection(county, st_buffer(federal_lands, 0))
+  #Solve problem of no federal area resulting in zero difference problem
+  if(length(federal_county) == 0) {
+    # print(paste(county_name,"has no federal land"))
+    federal_county = c(federal_county, st_sfc(st_polygon()))
+  }
+  if(length(blm_county_bound_box) == 0) {
+    blm_county_bound_box = c(blm_county_bound_box, st_sfc(st_polygon()))
+  }
   #
   df = create_data_frame(county_name, setback_distances, horizontal_distances)
   county_area = get_area(county)
